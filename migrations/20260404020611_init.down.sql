@@ -1,3 +1,0 @@
-DROP TABLE IF EXISTS coffees;
-
-DROP EXTENSION IF EXISTS "uuid-ossp";
