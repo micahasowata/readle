@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>PDF Viewer — Dark Mode</title>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+        <style>
+            :root {
+                --bg: #121212;
+                --panel: #1a1a1a;
+                --border: #2a2a2a;
+                --text: #ddd;
+                --accent: #4a9eff;
+            }
+            * {
+                box-sizing: border-box;
+            }
+            body {
+                margin: 0;
+                background-color: var(--bg);
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                min-height: 100vh;
+                font-family:
+                    -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            }
+
+            /* top bar: just a file picker, nothing else — no page numbers, no counters */
+            .topbar {
+                position: sticky;
+                top: 0;
+                width: 100%;
+                display: flex;
+                justify-content: center;
+                padding: 14px 0;
+                background: var(--panel);
+                border-bottom: 1px solid var(--border);
+                z-index: 10;
+            }
+            .topbar label {
+                color: var(--text);
+                font-size: 14px;
+                background: #242424;
+                border: 1px solid var(--border);
+                padding: 8px 16px;
+                border-radius: 6px;
+                cursor: pointer;
+                transition: border-color 0.15s;
+            }
+            .topbar label:hover {
+                border-color: var(--accent);
+            }
+            #file-input {
+                display: none;
+            }
+
+            #toggle-dark {
+                color: var(--text);
+                font-size: 14px;
+                background: #242424;
+                border: 1px solid var(--border);
+                padding: 8px 16px;
+                border-radius: 6px;
+                cursor: pointer;
+                margin-left: 10px;
+                transition: border-color 0.15s;
+            }
+            #toggle-dark:hover {
+                border-color: var(--accent);
+            }
+
+            body.light-mode {
+                background-color: #f4f4f4;
+            }
+            body.light-mode .topbar {
+                background: #fff;
+                border-bottom-color: #ddd;
+            }
+            body.light-mode .topbar label,
+            body.light-mode #toggle-dark {
+                color: #222;
+                background: #f0f0f0;
+                border-color: #ddd;
+            }
+            body.light-mode canvas {
+                filter: none;
+            }
+
+            #empty-state {
+                color: #777;
+                margin-top: 80px;
+                font-size: 14px;
+                text-align: center;
+            }
+
+            #pdf-container {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                padding: 24px 0 60px;
+            }
+
+            .page-container {
+                margin-bottom: 20px;
+                overflow: hidden;
+                box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
+                border-radius: 4px;
+            }
+
+            /* Canvas is rendered normally, then inverted for real dark mode —
+     no browser extension required.
+     clip-path crops the bottom strip where the PDF prints its own
+     footer/page number, so only the actual page content shows. */
+            canvas {
+                display: block;
+                filter: invert(0.92) hue-rotate(180deg);
+                clip-path: inset(0 0 40px 0);
+                margin-bottom: -40px;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="topbar">
+            <label for="file-input">Open PDF</label>
+            <input type="file" id="file-input" accept="application/pdf" />
+            <button id="toggle-dark">☀️ Light mode</button>
+        </div>
+
+        <div id="empty-state">Choose a PDF to read.</div>
+        <div id="pdf-container"></div>
+
+        <script>
+            pdfjsLib.GlobalWorkerOptions.workerSrc =
+                "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+            const fileInput = document.getElementById("file-input");
+            const container = document.getElementById("pdf-container");
+            const emptyState = document.getElementById("empty-state");
+            const toggleDark = document.getElementById("toggle-dark");
+
+            toggleDark.addEventListener("click", () => {
+                const isLight = document.body.classList.toggle("light-mode");
+                toggleDark.textContent = isLight
+                    ? "🌙 Dark mode"
+                    : "☀️ Light mode";
+            });
+
+            fileInput.addEventListener("change", async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                emptyState.style.display = "none";
+                container.innerHTML = "";
+
+                const arrayBuffer = await file.arrayBuffer();
+
+                try {
+                    const pdf = await pdfjsLib.getDocument({
+                        data: arrayBuffer,
+                    }).promise;
+
+                    for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+                        const page = await pdf.getPage(pageNum);
+
+                        const wrapper = document.createElement("div");
+                        wrapper.className = "page-container";
+                        const canvas = document.createElement("canvas");
+                        const context = canvas.getContext("2d");
+                        const viewport = page.getViewport({ scale: 2.5 });
+                        canvas.height = viewport.height;
+                        canvas.width = viewport.width;
+                        wrapper.appendChild(canvas);
+                        container.appendChild(wrapper);
+
+                        await page.render({
+                            canvasContext: context,
+                            viewport: viewport,
+                        }).promise;
+                    }
+                } catch (err) {
+                    console.error("Error rendering PDF:", err);
+                    emptyState.textContent =
+                        "Could not read that file — is it a valid PDF?";
+                    emptyState.style.display = "block";
+                }
+            });
+        </script>
+    </body>
+</html>
